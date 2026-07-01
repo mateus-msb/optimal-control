@@ -1,20 +1,21 @@
-# ==============================================================================
+# ===========================================================
 # Otimização de Volante de Inércia (Flywheel)
 # PME 5205 - CONTROLE ÓTIMO DE SISTEMAS DINÂMICOS
 # EXAME - 1º PERÍODO DE 2026
 # Aluno: Mateus Silva Borges
 # Método: Algoritmo Genético (GA) (Metaheuristics.jl)
-# ==============================================================================
+# ===========================================================
 
 using Metaheuristics
 using Printf
 using Random
 using Plots
+using Plots.Measures
 
 ## CONSTANTES FÍSICAS E ESPECIFICAÇÕES DO PROBLEMA ---
 const m_max = 68.00       # Massa máxima permitida (kg) ≈ 150 lb
 const d_max = 0.635       # Diâmetro máximo permitido (m) ≈ 25 in
-const h_max = 2.000       # Altura máxima permitida (m)
+const h_max = 1.000       # Altura máxima permitida (m)
 const σ_max = 1.379e8     # Tensão máxima permitida (Pa) ≈ 20000 psi
 const ρ = 7833.4          # Massa específica do material (kg/m³) - aço
 const ν = 0.3             # Coeficiente de Poisson
@@ -46,7 +47,7 @@ function objetivo_problema_1(x)
 
     # Restrição de desigualdade de Tensão
     σ = calcular_tensao(d, ω)
-    g2 = σ - σ_max
+    g2 = σ^2 - σ_max^2
 
     # Vetor de restrições de desigualdade
     g = [g1, g2]
@@ -55,6 +56,11 @@ function objetivo_problema_1(x)
     h_eq = [0.0]
 
     return f_obj, g, h_eq
+end
+
+function objetivo_problema_1_value(x)
+    f_obj, g, h_eq = objetivo_problema_1(x)
+    return f_obj
 end
 
 function objetivo_problema_2(x)
@@ -71,7 +77,7 @@ function objetivo_problema_2(x)
 
     # Restrição de desigualdade de Tensão
     σ = calcular_tensao(d, ω)
-    g2 = σ - σ_max
+    g2 = σ^2 - σ_max^2
     
     g = [g1, g2]
     
@@ -81,10 +87,33 @@ function objetivo_problema_2(x)
     return f_obj, g, h_eq
 end
 
+function plot_objetivo()
+    d_intervalo = range(0.001, d_max, length=200); 
+    h_intervalo = range(0.001, h_max, length=200);
+    f_plot(d, h) = objetivo_problema_1([d, h])[1]
+
+    contour_plot = contourf(d_intervalo, h_intervalo, f_plot,
+        levels = 20,
+        title = "Otimização com Restrições", 
+        framestyle = :box,
+        grid = :dot,
+        gridalpha = 0.6,
+        xlabel = "Diâmetro (m)",
+        ylabel = "Altura (m)",
+        size = (900, 600),
+        right_margin = 20mm,
+        left_margin = 3mm,
+    )
+
+    # Exibe o resultado final com tudo sobreposto
+    display(contour_plot)
+end
+
+
 ## PROBLEMA I: Otimização com d e h como variáveis (Velocidade ω = 3000 rpm fixa)
 # Variáveis de decisão: x = [d, h]
 # d ∈ [0.001, 0.635] (m)
-# h ∈ [0.001, 2.000] (m) - limite superior de h arbitrado de forma ampla
+# h ∈ [0.001, 1.000] (m) - limite superior de h arbitrado de forma ampla
 
 println("\n OTIMIZANDO PROBLEMA I")
 
@@ -92,15 +121,15 @@ println("\n OTIMIZANDO PROBLEMA I")
 bounds = boxconstraints(
     lb = [0.001, 0.001],
     ub = [d_max, h_max]
-)
+);
 
-options = Options(seed=1, store_convergence=true)
+options = Options(seed=1, store_convergence=true);
 
 result_1 = optimize(
     objetivo_problema_1,
     bounds,
     GA(
-        N = 100,
+        N = 50,
         p_mutation = 0.10,
         p_crossover = 0.8,
         mutation = PolynomialMutation(bounds = bounds),
@@ -130,76 +159,58 @@ println("\n[RESULTADO DO PROBLEMA I]")
 @printf("  Energia Armazenada:    %8.2f J\n", best_f1)
 
 # Visualizar
-X_1 = positions(result_1) 
-convergence_1 = convergence(result_1)
-n_iterations = length(convergence_1[1])
+X_1 = positions(result_1)
+convergence_1 = convergence(result_1);
+n_iterations = length(convergence_1[1]);
 
 f_calls, best_f_value = convergence(result_1)
 
+conv_plot = plot(f_calls, -best_f_value, label="GA");
+plot!(
+    title="Convergence",
+    xlabel="function calls",
+    ylabel="fitness",
+    framestyle=:box,
+    grid=:dot,
+    size=(600, 400),
+    gridalpha=0.6,
+    left_margin=3mm,
+    );
+display(conv_plot);
+
 indices_momentos = [
     1,
+    round(Int, 0.15 * n_iterations),
     round(Int, 0.25 * n_iterations),
     round(Int, 0.50 * n_iterations),
     round(Int, 0.75 * n_iterations),
     n_iterations
 ]
 
-# Array único que vai alimentar o layout (5, 2)
-todos_os_subplots = []
 
-for idx in indices_momentos
-    pop = historico_populacoes[idx]
-    geracao = historico_geracoes[idx]
-    
-    # 1. PRIMEIRA COLUNA: Gráfico de Dispersão da População
-    p_pop = scatter(
-        pop[:, 1], pop[:, 2],
-        xlim = (0.0, d_max * 1.1),
-        ylim = (0.0, h_max * 1.1),
-        xlabel = "d (m)",
-        ylabel = "h (m)",
-        title = "População - Geração $geracao",
-        legend = false,
-        markersize = 3,
-        markeralpha = 0.6,
-        color = :blue
-    )
-    # Marca de estrela na solução ótima global
-    scatter!(p_pop, [d_opt1], [h_opt1], color = :red, markersize = 5, marker = :star)
-    
-    # 2. SEGUNDA COLUNA: Evolução do Fitness acumulado até este momento
-    p_fitness = plot(
-        f_calls[1:idx], -best_f_value[1:idx],
-        xlim = (0, f_calls[end]), # Mantém o eixo X fixo para ver a evolução avançando
-        ylim = (0, best_f1 * 1.1),  # Mantém o eixo Y fixo para escala comparativa
-        xlabel = "Avaliações",
-        ylabel = "Energia (J)",
-        title = "Evolução do Fitness",
-        linewidth = 2,
-        color = :darkgreen,
-        legend = false
-    )
-    
-    # Adiciona sequencialmente na lista (População vira Coluna 1, Fitness vira Coluna 2)
-    push!(todos_os_subplots, p_pop)
-    push!(todos_os_subplots, p_fitness)
+for i in indices_momentos
+    p = plot(
+    title="Population Evolution",
+    xlabel="Diametro",
+    ylabel="Altura",
+    framestyle=:box,
+    grid=:dot,
+    size=(600, 400),
+    gridalpha=0.6,
+    left_margin=3mm,
+    );
+    X = positions(result_1.convergence[i])
+    scatter!(p[1], X[:,1], X[:,2], label="", xlim=(0, d_max), ylim=(0, h_max), title="Population")
+    x = minimizer(result_1.convergence[i])
+    scatter!(p[1], x[1:1], x[2:2], label="")
+    display(p)
 end
-
-# Criando a Matrix de Subplots (5 linhas, 2 colunas)
-plot_final = plot(
-    todos_os_subplots...,
-    layout = (5, 2),
-    size = (1000, 1400) # Redimensionado para dar espaçamento vertical adequado às 5 linhas
-)
-
-# Exibe e salva
-display(plot_final)
-
+display(p)
 
 ## PROBLEMA II: Otimização com d, h e ω como variáveis (ω ∈ [2000, 4000] rpm)
 # Variáveis de decisão: x = [d, h, ω]
 # d ∈ [0.001, 0.635] (m)
-# h ∈ [0.001, 2.000] (m)
+# h ∈ [0.001, 1.000] (m)
 # ω ∈ [2000π/30, 4000π/30] (rad/s)
 
 function executar_otimizacao()
@@ -279,4 +290,4 @@ function executar_otimizacao()
 end
 
 # Inicia a otimização
-executar_otimizacao_1()
+executar_otimizacao()
