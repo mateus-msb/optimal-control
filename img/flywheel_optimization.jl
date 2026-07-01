@@ -58,11 +58,6 @@ function objetivo_problema_1(x)
     return f_obj, g, h_eq
 end
 
-function objetivo_problema_1_value(x)
-    f_obj, g, h_eq = objetivo_problema_1(x)
-    return f_obj
-end
-
 function objetivo_problema_2(x)
     d = x[1]
     h = x[2]
@@ -87,10 +82,13 @@ function objetivo_problema_2(x)
     return f_obj, g, h_eq
 end
 
-function plot_objetivo()
+function plot_objetivo(name)
+    
     d_intervalo = range(0.001, d_max, length=200); 
     h_intervalo = range(0.001, h_max, length=200);
+
     f_plot(d, h) = objetivo_problema_1([d, h])[1]
+    g1_plot(d, h) = objetivo_problema_1([d, h])[2][1]
 
     contour_plot = contourf(d_intervalo, h_intervalo, f_plot,
         levels = 20,
@@ -103,10 +101,89 @@ function plot_objetivo()
         size = (900, 600),
         right_margin = 20mm,
         left_margin = 3mm,
-    )
+    );
+    contour!(d_intervalo, h_intervalo, g1_plot,
+        levels = [0.0],
+        color = :red,
+        linestyle = :dash,
+        linewidth = 2.0,
+        label = "Restrição de Massa",
+    );
 
     # Exibe o resultado final com tudo sobreposto
     display(contour_plot)
+    savefig(contour_plot, "$(name)_contorno.png")
+end
+
+function plot_convergence(result, name)
+
+    # fitness
+    f_calls, best_f_value = convergence(result)
+    
+    conv_plot = plot(f_calls, -best_f_value);
+    plot!(
+        title="Convergência",
+        xlabel="Chamadas da Função Objetivo",
+        ylabel="Energia Armazenada",
+        label="GA",
+        framestyle=:box,
+        grid=:dot,
+        size=(600, 400),
+        gridalpha=0.6,
+        left_margin=3mm,
+        titlefontsize=12,
+        legendfontsize=10
+        );
+    display(conv_plot);
+    savefig(conv_plot, "$(name)_convergencia.png")
+
+    # population
+    _convergence = convergence(result);
+    n_iterations = length(_convergence[1]);
+
+    indices_momentos = [
+        1,
+        2,
+        3,
+        4,
+        round(Int, 0.10 * n_iterations),
+        round(Int, 0.15 * n_iterations),
+        round(Int, 0.50 * n_iterations),
+        n_iterations
+    ]
+    n = length(indices_momentos)
+    list_plots = []
+
+    for i in indices_momentos
+
+        p = plot(
+            title="Geração $(i)",
+            xlabel="Diametro",
+            ylabel="Altura",
+            framestyle=:box,
+            grid=:dot,
+            gridalpha=0.6,
+            left_margin=5mm,
+            bottom_margin=5mm,
+        );
+
+        X = positions(result.convergence[i])
+        scatter!(p, X[:,1], X[:,2], label="", xlim=(0, d_max), ylim=(0, h_max))
+        x = minimizer(result.convergence[i])
+        scatter!(p, x[1:1], x[2:2], label="")
+
+        push!(list_plots, p)
+    end
+
+    subplot_final = plot(list_plots..., 
+        layout = (div(n, 2), 2), 
+        plot_title = "Evolução da População",
+        size = (1200, 350 * div(n, 2)),
+        left_margin=5mm,
+        bottom_margin=5mm,
+    );
+    display(subplot_final);
+    savefig(subplot_final, "$(name)_populacao.png")
 end
 
 
@@ -125,17 +202,16 @@ bounds = boxconstraints(
 
 options = Options(seed=1, store_convergence=true);
 
-result_1 = optimize(
-    objetivo_problema_1,
-    bounds,
-    GA(
-        N = 50,
-        p_mutation = 0.10,
-        p_crossover = 0.8,
-        mutation = PolynomialMutation(bounds = bounds),
-        options=options
-        )
-        )
+ga_1 = GA(
+    N = 50,
+    selection = TournamentSelection(K=3, N=50),
+    crossover = UniformCrossover(p=0.80),
+    mutation = PolynomialMutation(η=5, p=1/2, bounds = bounds),
+    environmental_selection = ElitistReplacement(),
+    options=options
+    )
+
+result_1 = optimize(objetivo_problema_1,bounds,ga_1)
 
 # Extração dos melhores parâmetros
 best_x1 = minimizer(result_1)
@@ -159,53 +235,9 @@ println("\n[RESULTADO DO PROBLEMA I]")
 @printf("  Energia Armazenada:    %8.2f J\n", best_f1)
 
 # Visualizar
-X_1 = positions(result_1)
-convergence_1 = convergence(result_1);
-n_iterations = length(convergence_1[1]);
+plot_objetivo("problema_1")
+plot_convergence(result_1, "problema_1")
 
-f_calls, best_f_value = convergence(result_1)
-
-conv_plot = plot(f_calls, -best_f_value, label="GA");
-plot!(
-    title="Convergence",
-    xlabel="function calls",
-    ylabel="fitness",
-    framestyle=:box,
-    grid=:dot,
-    size=(600, 400),
-    gridalpha=0.6,
-    left_margin=3mm,
-    );
-display(conv_plot);
-
-indices_momentos = [
-    1,
-    round(Int, 0.15 * n_iterations),
-    round(Int, 0.25 * n_iterations),
-    round(Int, 0.50 * n_iterations),
-    round(Int, 0.75 * n_iterations),
-    n_iterations
-]
-
-
-for i in indices_momentos
-    p = plot(
-    title="Population Evolution",
-    xlabel="Diametro",
-    ylabel="Altura",
-    framestyle=:box,
-    grid=:dot,
-    size=(600, 400),
-    gridalpha=0.6,
-    left_margin=3mm,
-    );
-    X = positions(result_1.convergence[i])
-    scatter!(p[1], X[:,1], X[:,2], label="", xlim=(0, d_max), ylim=(0, h_max), title="Population")
-    x = minimizer(result_1.convergence[i])
-    scatter!(p[1], x[1:1], x[2:2], label="")
-    display(p)
-end
-display(p)
 
 ## PROBLEMA II: Otimização com d, h e ω como variáveis (ω ∈ [2000, 4000] rpm)
 # Variáveis de decisão: x = [d, h, ω]
@@ -213,81 +245,43 @@ display(p)
 # h ∈ [0.001, 1.000] (m)
 # ω ∈ [2000π/30, 4000π/30] (rad/s)
 
-function executar_otimizacao()
-    # --- RESOLVENDO PROBLEMA I ---
-    println("\n>>> OTIMIZANDO PROBLEMA I (Velocidade fixa em 3000 rpm)...")
-    
-    # Limites das variáveis: [d, h]
-    bounds = boxconstraints(
-        lb = [0.001, 0.001],
-        ub = [d_max, h_max]
+println("\nOTIMIZANDO PROBLEMA II")
+
+# Limites das variáveis: [d, h, ω]
+bounds_2 = boxconstraints(
+    lb = [0.001, 0.001, 2000.0 * π / 30.0],
+    ub = [d_max, h_max, 4000.0 * π / 30.0]
+)
+
+options = Options(seed=1, store_convergence=true);
+ga_2 = GA(
+    N = 50,
+    selection = TournamentSelection(K=3, N=50),
+    crossover = UniformCrossover(p=0.80),
+    mutation = PolynomialMutation(η=10, p=1/3, bounds = bounds_2),
+    environmental_selection = ElitistReplacement(),
+    options=options
     )
 
-    result_1 = optimize(objetivo_problema_1, bounds, GA(
-        N = 120,
-        p_mutation = 0.15,
-        p_crossover = 0.8,
-        mutation = PolynomialMutation(bounds = bounds)
-    ))
-    
-    # Extração dos melhores parâmetros
-    best_x1 = minimizer(result_1)
-    best_f1 = -minimum(result_1) # Convertendo de volta para positivo (Maximização)
-    
-    d_opt1 = best_x1[1]
-    h_opt1 = best_x1[2]
-    ω_opt1 = 3000.0 * π / 30.0
-    ω_opt1_rpm = ω_opt1 * 30.0 / π
-    massa_opt1 = ρ * (π * d_opt1^2 / 4.0) * h_opt1
-    σ_opt1 = calcular_tensao(d_opt1, ω_opt1)
+result_2 = optimize(objetivo_problema_2, bounds_2, ga_2)
 
-    println("\n[RESULTADO DO PROBLEMA I]")
-    @printf("  Diâmetro Ótimo (d):   %8.4f m  (%7.2f mm)\n", d_opt1, d_opt1 * 1000.0)
-    @printf("  Altura Ótima (h):      %8.4f m  (%7.2f mm)\n", h_opt1, h_opt1 * 1000.0)
-    @printf("  Velocidade Angular:    %8.2f rad/s  (%8.2f rpm)\n", ω_opt1, ω_opt1_rpm)
-    @printf("  Massa Resultante:      %8.4f kg  (Limite: %.2f kg)\n", massa_opt1, m_max)
-    @printf("  Tensão de Pico:        %8.2e Pa (Limite: %.2e Pa)\n", σ_opt1, σ_max)
-    @printf("  Energia Armazenada:    %8.2f J\n", best_f1)
+best_x2 = minimizer(result_2)
+best_f2 = -minimum(result_2)
 
-    # --- RESOLVENDO PROBLEMA II ---
-    println("\n" * "-"^80)
-    println("\n>>> OTIMIZANDO PROBLEMA II (Velocidade variável no intervalo [2000, 4000] rpm)...")
+d_opt2 = best_x2[1]
+h_opt2 = best_x2[2]
+ω_opt2 = best_x2[3]
+ω_opt2_rpm = ω_opt2 * 30.0 / π
+massa_opt2 = ρ * (π * d_opt2^2 / 4.0) * h_opt2
+σ_opt2 = calcular_tensao(d_opt2, ω_opt2)
 
-    # Limites das variáveis: [d, h, ω]
-    bounds_2 = boxconstraints(
-        lb = [0.001, 0.001, 2000.0 * π / 30.0],
-        ub = [d_max, h_max, 4000.0 * π / 30.0]
-    )
+println("\n[RESULTADO DO PROBLEMA II]")
+@printf("  Diâmetro Ótimo (d):   %8.4f m  (%7.2f mm)\n", d_opt2, d_opt2 * 1000.0)
+@printf("  Altura Ótima (h):      %8.4f m  (%7.2f mm)\n", h_opt2, h_opt2 * 1000.0)
+@printf("  Velocidade Ótima (ω): %8.2f rad/s  (%8.2f rpm)\n", ω_opt2, ω_opt2_rpm)
+@printf("  Massa Resultante:      %8.4f kg  (Limite: %.2f kg)\n", massa_opt2, m_max)
+@printf("  Tensão de Pico:        %8.2e Pa (Limite: %.2e Pa)\n", σ_opt2, σ_max)
+@printf("  Energia Armazenada:    %8.2f J\n", best_f2)
+println("="^80)
 
-    ga_2 = GA(
-        N = 120,
-        p_mutation = 0.15,
-        p_crossover = 0.8,
-        mutation = PolynomialMutation(bounds = bounds_2)
-    )
-
-    result_2 = optimize(objetivo_problema_2, bounds_2, ga_2)
-
-    best_x2 = minimizer(result_2)
-    best_f2 = -minimum(result_2)
-    
-    d_opt2 = best_x2[1]
-    h_opt2 = best_x2[2]
-    ω_opt2 = best_x2[3]
-    ω_opt2_rpm = ω_opt2 * 30.0 / π
-    massa_opt2 = ρ * (π * d_opt2^2 / 4.0) * h_opt2
-    σ_opt2 = calcular_tensao(d_opt2, ω_opt2)
-
-    println("\n[RESULTADO DO PROBLEMA II]")
-    @printf("  Diâmetro Ótimo (d):   %8.4f m  (%7.2f mm)\n", d_opt2, d_opt2 * 1000.0)
-    @printf("  Altura Ótima (h):      %8.4f m  (%7.2f mm)\n", h_opt2, h_opt2 * 1000.0)
-    @printf("  Velocidade Ótima (ω): %8.2f rad/s  (%8.2f rpm)\n", ω_opt2, ω_opt2_rpm)
-    @printf("  Massa Resultante:      %8.4f kg  (Limite: %.2f kg)\n", massa_opt2, m_max)
-    @printf("  Tensão de Pico:        %8.2e Pa (Limite: %.2e Pa)\n", σ_opt2, σ_max)
-    @printf("  Energia Armazenada:    %8.2f J\n", best_f2)
-    println("="^80)
-    
-end
-
-# Inicia a otimização
-executar_otimizacao()
+plot_convergence(result_2, "problema_2")
