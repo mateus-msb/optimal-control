@@ -16,6 +16,8 @@ using Plots.Measures
 const m_max = 68.00       # Massa máxima permitida (kg) ≈ 150 lb
 const d_max = 0.635       # Diâmetro máximo permitido (m) ≈ 25 in
 const h_max = 1.000       # Altura máxima permitida (m)
+const ω_min = 2000.0 * π / 30.0  # Velocidade angular mínima (rad/s) ≈ 2000 rpm
+const ω_max = 4000.0 * π / 30.0  # Velocidade angular máxima (rad/s) ≈ 4000 rpm
 const σ_max = 1.379e8     # Tensão máxima permitida (Pa) ≈ 20000 psi
 const ρ = 7833.4          # Massa específica do material (kg/m³) - aço
 const ν = 0.3             # Coeficiente de Poisson
@@ -151,34 +153,59 @@ function plot_convergence(result, name)
         round(Int, 0.50 * n_iterations),
         n_iterations
     ]
-    n = length(indices_momentos)
-    list_plots = []
+    list_plots = Plots.Plot[]
+    is_3d = size(positions(result.convergence[1]), 2) == 3
 
     for i in indices_momentos
 
-        p = plot(
-            title="Geração $(i)",
-            xlabel="Diametro",
-            ylabel="Altura",
-            framestyle=:box,
-            grid=:dot,
-            gridalpha=0.6,
-            left_margin=5mm,
-            bottom_margin=5mm,
-        );
-
         X = positions(result.convergence[i])
-        scatter!(p, X[:,1], X[:,2], label="", xlim=(0, d_max), ylim=(0, h_max))
         x = minimizer(result.convergence[i])
-        scatter!(p, x[1:1], x[2:2], label="")
+
+        if size(X, 2) == 3
+            p = plot(
+                title="Geração $(i)",
+                xlabel="d (m)",
+                xlim=(0, d_max),
+                ylabel="h (m)",
+                ylim=(0, h_max),
+                zlabel="ω (rad/s)",
+                zlim=(ω_min, ω_max),
+                framestyle=:box,
+                grid=:dot,
+                gridalpha=0.6,
+                size=(400, 400),
+                margin=5mm,
+            );
+            scatter3d!(p, X[:,1], X[:,2], X[:,3], label="")
+            scatter3d!(p, x[1:1], x[2:2], x[3:3], label="")
+        else
+            p = plot(
+                title="Geração $(i)",
+                xlabel="d (m)",
+                xlim=(0, d_max),
+                ylabel="h (m)",
+                ylim=(0, h_max),
+                framestyle=:box,
+                grid=:dot,
+                gridalpha=0.6,
+                left_margin=5mm,
+                bottom_margin=5mm,
+            );
+            scatter!(p, X[:,1], X[:,2], label="", xlim=(0, d_max), ylim=(0, h_max))
+            scatter!(p, x[1:1], x[2:2], label="")
+        end
 
         push!(list_plots, p)
     end
 
+    n = length(list_plots)
+    layout_pop = (div(n, 2), 2)
+    size_pop = is_3d ? (800, 400 * div(n, 2)) : (1200, 350 * div(n, 2))
+
     subplot_final = plot(list_plots..., 
-        layout = (div(n, 2), 2), 
+        layout = layout_pop, 
         plot_title = "Evolução da População",
-        size = (1200, 350 * div(n, 2)),
+        size = size_pop,
         left_margin=5mm,
         bottom_margin=5mm,
     );
@@ -249,9 +276,9 @@ println("\nOTIMIZANDO PROBLEMA II")
 
 # Limites das variáveis: [d, h, ω]
 bounds_2 = boxconstraints(
-    lb = [0.001, 0.001, 2000.0 * π / 30.0],
-    ub = [d_max, h_max, 4000.0 * π / 30.0]
-)
+    lb = [0.001, 0.001, ω_min],
+    ub = [d_max, h_max, ω_max]
+);
 
 options = Options(seed=1, store_convergence=true);
 ga_2 = GA(
