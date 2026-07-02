@@ -556,7 +556,113 @@ Completando o quadrado perfeito em $Y$, conseguimos ajustar a equação para a f
 
 \subsection*{Questão 5}
 
-CCCCCCCCCCCCCCCCCCCcc
+\subsubsection*{Algoritmo Genético}
+
+O Algoritmo Genético (GA) é um método meta-heurístico de otimização global baseado nos princípios da seleção natural e da genética biológica. Ao contrário dos métodos determinísticos baseados em gradientes, o GA opera sobre uma população de indivíduos simultâneos tornando-se altamente robusto contra mínimos locais em superfícies de custo não-convexas ou descontínuas.
+
+O vetor de variáveis de decisão representa o genótipo do indivíduo, enquanto os valores calculados de massa, tensão de pico e energia compõem o fenótipo avaliado pelo operador de aptidão (fitness). Esse método de otimização de grau zero representa um balanço ótimo entre exploração (mapeamento global) e explotação (refinamento local). Esse equilíbrio dinâmico pode ser calibrado para uma melhor convergência através da escolha dos mecanismos e operadores genéticos.
+
+\begin{itemize}
+    \item \textbf{Seleção por Torneio (\texttt{TournamentSelection(K=3, N=50)}):} O tamanho da população é fixado em $N=50$ indivíduos. Para cada vaga de reprodução, $K=3$ indivíduos são amostrados aleatoriamente e o de melhor aptidão (considerando a função objetivo e as penalidades de restrição) é selecionado como pai. Definir $K=3$ estabelece uma pressão seletiva calibrada: mitiga a convergência prematura nas gerações iniciais mantendo a diversidade genética, mas garante que os genes mais aptos guiem a busca.
+    \item \textbf{Crossover Uniforme (\texttt{UniformCrossover(p=0.80)}):} Com uma probabilidade de $80\%$, os pais selecionados trocam material genético. No crossover uniforme, cada gene (coordenada do vetor de decisão) do descendente é escolhido de forma independente a partir de um dos genitores com base em uma distribuição equilibrada. Esse operador possui alto poder exploratório e destrói correlações posicionais rígidas, permitindo combinar de forma eficiente parâmetros geométricos ($d, h$) e operacionais ($\omega$).
+    \item \textbf{Mutação Polinomial (\texttt{PolynomialMutation}):} Essencial para codificação real, gera perturbações contínuas baseadas em uma distribuição polinomial em torno do valor original do gene. Os valores adotados para esse operador são adaptados à dimensão do problema e à natureza das restrições:
+    \begin{itemize}
+        \item \textbf{Problema I (Dimensão 2):} Adota-se um índice de distribuição $\eta=5$ e probabilidade $p_m=1/2$. Um valor menor de $\eta$ abre a curva de probabilidade, permitindo mutações com saltos mais amplos para explorar de forma agressiva o plano bidimensional.
+        \item \textbf{Problema II (Dimensão 3):} Utiliza-se $\eta=10$ e probabilidade reduzida $p_m=1/3$. Aumentar o índice estreita a curva de mutação, gerando perturbações menores, predominantemente locais. Como o espaço tridimensional é maior e restrições centrífugas são severas, saltos longos gerariam muitos indivíduos inviáveis, justificando um refinamento mais suave ao longo das restrições.
+    \end{itemize}
+    \item \textbf{Seleção Ambiental Elitista (\texttt{ElitistReplacement}):} Aplica uma estratégia onde os $N=50$ melhores indivíduos da população conjunta de pais e filhos são preservados para a geração subsequente. Isso assegura que a melhor solução de energia mecânica encontrada nunca sofra regressão ao longo do horizonte evolutivo, garantindo convergência monotônica.
+\end{itemize}
+
+
+No contexto do projeto do volante de inércia (KERS), o objetivo é maximizar a energia cinética armazenada, mapeada como um problema de minimização do valor negativo dessa energia para alinhar com a arquitetura das bibliotecas de programação adotadas. 
+
+\subsubsection*{Velocidade Angular Fixa (Problema I)}
+
+A topologia do espaço de busca bidimensional do Problema I, onde a velocidade angular é fixada na rotação nominal de $3000$ rpm, foi graficamente mapeada a partir da função objetivo. A Figura~\ref{fig:contorno} apresenta as curvas de nível da energia armazenada calculada negativamente para fins de minimização algorítmica, variando em função do diâmetro $d$ e da altura $h$ do disco de aço.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{img/problema_1_contorno.png}
+    \caption{Representação gráfica do contorno da função objetivo do problema 1 de velocidade angular fixa em $3000$ rpm. A linha tracejada representa a fronteira de estados admissíveis quanto à restrição de massa.}
+    \label{fig:contorno}
+\end{figure}
+
+A análise das curvas de nível da Figura~\ref{fig:contorno} demonstra que a restrição de tensão e restrição de massa delimitam rigidamente o diâmetro máximo admissível. A equação de tensão centrífuga de pico independe da espessura ou altura $h$, essa barreira se comporta como uma reta vertical estrita paralela ao eixo das ordenadas. Paralelamente, a restrição de massa máxima estabelece uma fronteira hiperbólica regida pela equação geométrica. O ponto ótimo global determinado pelo GA localiza-se exatamente no vértice de interseção entre a restrição hiperbólica de massa ativa e o limite geométrico de diâmetro, onde as duas restrições de desigualdade se tornam ativas simultaneamente.
+
+O monitoramento do desempenho computacional e da taxa de aprendizado do algoritmo genético é feito pelo gráfico de convergência do funcional. A Figura \ref{fig:convergencia_1} ilustra a evolução temporal do melhor valor da função objetivo em relação ao número acumulado de chamadas da função objetivo no interior do loop adaptativo.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{img/problema_1_convergencia.png}
+    \caption{Convergência da função objetivo do problema 1 de velocidade angular fixa em $3000$ rpm.}
+    \label{fig:convergencia_1}
+\end{figure}
+
+O perfil gráfico obtido na Figura \ref{fig:convergencia_1} evidencia degraus evolutivos muito claros, comportamento típico de mecanismos de substituição ambiental elitista. Os longos patamares horizontais representam períodos em que a população consolida sua diversidade local ou elimina candidatos inviáveis sem alterações no melhor indivíduo absoluto, enquanto os saltos verticais abruptos indicam a descoberta de novos candidatos ótimos via mutação ou recombinação (crossover) uniforme bem-sucedida. A estabilização completa ocorre rapidamente, atingindo o patamar assintótico estável de aproximadamente $1,60 \times 10^5$ J por volta de apenas 1000 chamadas à função objetivo.
+
+A dinâmica de movimentação e a transição entre as fases de exploração global e explotação local podem ser visualizadas por meio da distribuição espacial dos indivíduos no plano $(d, h)$. A Figura \ref{fig:populacao_1} decompõe essa evolução populacional em momentos-chave da execução do algoritmo, retratando as Gerações 1, 2, 3, 4, 6, 21 e 42 para evidenciar o estreitamento estocástico populacional .
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.9\textwidth]{img/problema_1_populacao.png}
+    \caption{Evolução da população do problema 1 de velocidade angular fixa em $3000$ rpm.}
+    \label{fig:populacao_1}
+\end{figure}
+
+Conforme observado na sequência cronológica da Figura \ref{fig:populacao_1}, a Geração 1 exibe uma distribuição e dispersão uniformes de indivíduos espalhados aleatoriamente por todo o domínio de busca delimitado pelas restrições de caixa. Entre as Gerações 2 e 6, a pressão exercida pela seleção por torneio força uma rápida migração vertical e horizontal. A população abandona as zonas de baixa energia e as zonas proibidas, e então passa a se acumular de forma densa ao longo da curva hiperbólica de restrição ativa de massa. A partir da Geração 21 e consolidando-se na Geração 42, os operadores genéticos provocam o colapso completo da variância populacional, concentrando todos os indivíduos em um único ponto isolado, o qual representa a convergência exata para o ótimo paramétrico global encontrado.
+
+\subsubsection*{Velocidade Angular Variável (Problema II)}
+
+Ao estender o vetor de projeto para incluir a velocidade angular $\omega$ como variável de decisão contínua entre $2000$ e $4000\text{ rpm}$ ($\omega \in [200\pi/3, 400\pi/3]\text{ rad/s}$), a complexidade do problema é ampliada devido ao aumento da dimensionalidade do espaço de busca. A Figura \ref{fig:convergencia_2} registra o comportamento da convergência da energia armazenada máxima ao longo das iterações para o Problema II tridimensional.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.6\textwidth]{img/problema_2_convergencia.png}
+    \caption{Convergência da função objetivo do problema 2 de velocidade angular variável.}
+    \label{fig:convergencia_2}
+\end{figure}
+
+Em comparação com o cenário bidimensional, a curva de convergência da Figura \ref{fig:convergencia_2} exige um número visivelmente maior de chamadas à função objetivo para atingir a estabilização assintótica, aproximadamente 4000 chamadas para convergência completa em comparação com as 2000 chamadas do Problema I. Isso ocorre porque o algoritmo precisa sintonizar de forma coordenada três parâmetros acoplados não-linearmente ($d, h, \omega$). Graças ao aumento do índice de distribuição da mutação polinomial para $\eta=10$, as transições entre os degraus de energia tornam-se mais suaves e refinadas, permitindo passos de alta precisão nas proximidades do limite de falha por energia de distorção do aço, atingindo um patamar energético superior próximo a $1,75 \times 10^5\text{ J}$.
+
+A Figura \ref{fig:populacao_2} apresenta a dispersão da população de $N=50$ indivíduos no espaço tridimensional definido pelos eixos coordenados do diâmetro $d$, da altura $h$ e da velocidade angular $\omega$.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.7\textwidth]{img/problema_2_populacao.png}
+    \caption{Evolução da população do problema 2 de velocidade angular variável.}
+    \label{fig:populacao_2}
+\end{figure}
+
+A análise volumétrica da Figura \ref{fig:populacao_2} fornece uma prova visual do funcionamento eficiente do algoritmo genético em alta dimensão. Na Geração 1, as partículas ocupam o volume tridimensional de forma esparsa e exploratória. Rapidamente, nas Gerações 2 a 4, a população descarta as regiões proibidas e realiza uma exploração ao longo das diferentes rotações. Nas gerações finais (Gerações 41 a 82), a população condensa-se fortemente em uma coordenada terminal de velocidade e diâmetro.
+
+\subsubsection*{Resultados da Otimização}
+
+Os resultados ótimos encontrados pelo Algoritmo Genético foram compilados estruturadamente. A Tabela~\ref{tab:resultados_otimizacao} apresenta a comparação quantitativa entre o Problema I e o Problema II. Cada variante detalha as dimensões geométricas finais do disco de aço, os parâmetros físicos resultantes e a capacidade total de armazenamento energético do sistema KERS.
+
+\begin{table}[H]
+    \centering
+    \caption{Comparação dos resultados de otimização paramétrica para os Problemas I e II.}
+    \label{tab:resultados_otimizacao}
+    \vspace{0.2cm}
+    \begin{tabular}{lcc}
+        \toprule
+        \textbf{Propriedade da Solução} & \textbf{Problema I (Rotação Fixa)} & \textbf{Problema II (Rotação Livre)} \\
+        \midrule
+        Diâmetro Ótimo ($d$) & $0,6350\text{ m}$ ($635,00\text{ mm}$) & $0,4883\text{ m}$ ($488,30\text{ mm}$) \\
+        Altura Ótima ($h$) & $0,0270\text{ m}$ ($27,03\text{ mm}$) & $0,0463\text{ m}$ ($46,35\text{ mm}$) \\
+        Velocidade Angular ($\omega$) & $314,16\text{ rad/s}$ ($3000\text{ rpm}$) & $418,88\text{ rad/s}$ ($4000\text{ rpm}$) \\
+        Massa Resultante ($m$) & $67,0545\text{ kg}$ & $67,9864\text{ kg}$ \\
+        \textit{Massa Limite} & \textit{($68,00\text{ kg}$)} & \textit{($68,00\text{ kg}$)} \\
+        Tensão de Pico ($\sigma_{\max}$) & $1,29 \times 10^8\text{ Pa}$ & $1,35 \times 10^8\text{ Pa}$ \\
+        \textit{Tensão Limite (Escoamento)} & \textit{($1,38 \times 10^8\text{ Pa}$)} & \textit{($1,38 \times 10^8\text{ Pa}$)} \\
+        \textbf{Energia Armazenada ($E$)} & $\mathbf{166.784,30\text{ J}}$ & $\mathbf{177.769,07\text{ J}}$ \\
+        \bottomrule
+    \end{tabular}
+\end{table}
+
+A análise comparativa dos dados revela que a inclusão da velocidade angular como variável de decisão livre no Problema II expandiu a região viável do espaço de projeto, permitindo uma solução superior que resultou em um acréscimo de aproximadamente $6,58\%$ na energia cinética máxima armazenada. No Problema I, o algoritmo foi limitado pelo limite geométrico superior do diâmetro e a única forma de buscar o aumento da inércia de rotação era expandindo o raio até a restrição de tensão, ajustando a espessura para não violar a restrição hiperbólica de massa útil. 
+
+No Problema II, por outro lado, o algoritmo genético maximizou energia utilizando a rotação máxima permitida. Para viabilizar fisicamente essa rotação elevada sem causar a falha por tensão, o otimizador reduziu o diâmetro para $0,4883\text{ m}$ ($23,1\%$ menor que o limite) e compensou a perda volumétrica aumentando a altura do cilindro para $46,35\text{ mm}$. Em ambos os cenários, nota-se que a meta-heurística foi capaz de fazer a população tangenciar com extrema precisão os limites restritivos de projeto, deixando a massa resultante ativa no limiar crítico e a tensão mecânica de pico muito próxima ao escoamento admissível do aço.
 
 \newpage
 
